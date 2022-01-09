@@ -1,3 +1,4 @@
+
 # FactoryApp
 App to manage your own farm: from the garden to daily chores
 The project aims to be open-source, IoT oriented, low-power, and usable by small to medium businesses.
@@ -10,7 +11,12 @@ The project aims to be open-source, IoT oriented, low-power, and usable by small
     pi@rasphost:~ $ uname -a 
     Linux rasphost 5.4.47-v7+ #1322 SMP Wed Jun 17 17:52:39 BST 2020 armv7l GNU/Linux
   
-
+## Security first
+In order to manage access to the different resources of the application (database, images, credentials, etc...) in a secure way, a **factoryapp** user and group has been created. The different users associated to the services (database, application, etc..) will be added to the factoryapp group in order to manage the grants natively with the Linux mode.
+* Create a new user at OS level who will represent the application project:
+```
+	root@rasphost:/media# adduser factoryapp --home /media/factoryapp/
+```
 
 ## Installation
 It has been necessary to format the external memories in ext4 (previously they were in FAT32) because from some researches it has resulted that
@@ -27,8 +33,8 @@ It has been necessary to format the external memories in ext4 (previously they w
 * Formatting with a new file system:	
 
 ```
-    root@rasphost:/home/pi# mkfs.ext4 -F -O ^64bit -L "memoria1_64gb" /dev/sda1 
-    root@rasphost:/home/pi# mkfs.ext4 -F -O ^64bit -L "memoria2_64gb" /dev/sdb1
+mkfs.ext4 -F -O ^64bit -L "memoria1_64gb" /dev/sda1 
+mkfs.ext4 -F -O ^64bit -L "memoria2_64gb" /dev/sdb1
 ```
 * Edit the /etc/fstab file to mount in ext4 and under /media/postgres directory (on that directory only postgres user must have access):
 ```
@@ -42,38 +48,38 @@ UUID=c5761481-2c1e-4eaa-8017-9083e4ac79da       /media/postgres/mem1_64gb       
 
 * Create the data directory to host database on mounted external memory:
 ```
-	root@rasphost:/home/pi# cd /media/postgres/mem1_64gb
-	root@rasphost:/media/postgres/mem1_64gb# mkdir factoryapp
-	root@rasphost:/media/postgres/mem1_64gb# cd factoryapp
-	root@rasphost:/media/postgres/mem1_64gb/factoryapp# mkdir database
+	cd /media/postgres/mem1_64gb
+	mkdir factoryapp
+	cd factoryapp
+	mkdir database
 ```
 
 * Restart raspberry:
 ```
-	root@rasphost:/media/postgres/mem1_64gb/factoryapp# reboot
+	reboot
 ```
 
 * Install PostgreSQL database management system:
 
 ```
-	root@rasphost:/home/pi# sudo apt install postgresql postgresql-contrib
+	sudo apt install postgresql postgresql-contrib
 ```
 
 * Obtain the Postgres cluster status. It should return the location of the log file. 
 ```
-	root@rasphost:/home/pi# pg_lsclusters
+	pg_lsclusters
 
 	Ver Cluster Port Status Owner    Data directory               Log file
 	9.6 main    5432 online postgres /var/lib/postgresql/9.6/main /var/log/postgresql/postgresql-9.6-main.log
 ```
 > **Note:** If the cluster is down or having problems, use the following nano command to view the file:
 ```
-	root@rasphost:/home/pi# nano /var/log/postgresql/postgresql-11-main.log
+	nano /var/log/postgresql/postgresql-11-main.log
 ```
 
 * Once Postgres is working, the following command can be used to access the admin role for the Postgre server:
 ```
-	root@rasphost:/home/pi# su postgres
+	su postgres
 	postgres@rasphost:/home/pi$ psql
 	psql (9.6.24)
 	Digit "help" to have an help.
@@ -92,7 +98,7 @@ Execute the following **SHOW SQL** command to obtain the location of the **pg_hb
              
 * Modify the network configuration policy and allowed IP enabled to talk with PostgreSQL:
 ```
-	root@rasphost:/home/pi# nano /etc/postgresql/9.6/main/pg_hba.conf
+	nano /etc/postgresql/9.6/main/pg_hba.conf
 ```
 
 ## Change data directory:
@@ -107,18 +113,18 @@ Execute the following **SHOW SQL** command to obtain the location of the **pg_hb
 
 * Stop the postgres service:
 ```
-	root@rasphost:/home/pi# systemctl stop postgresql
+	systemctl stop postgresql
 ```
 
 * Now that the PostgreSQL server is shut down, we’ll copy the existing database directory to the new location with **rsync**. Using the **-a** flag preserves the permissions and other directory properties, while **-v** provides verbose output so you can follow the progress. We’re going to start the rsync from the postgresql directory in order to mimic the original directory structure in the new location. By creating that postgresql directory within the mount-point directory and retaining ownership by the PostgreSQL user, we can avoid permissions problems for future upgrades.
 
 > **Note:** Be sure there is no trailing slash on the directory, which may be added if you use tab completion. If you do include a trailing slash, rsync will dump the contents of the directory into the mount point instead of copying over the directory itself.*
 ```
-	root@rasphost:/home/pi# rsync -av /var/lib/postgresql /media/pi/mem1_64gb/factoryapp/database
+	rsync -av /var/lib/postgresql /media/postgres/mem1_64gb/factoryapp/database
 ```
 * Edit the conf file to change data directory. Find the line that begins with data_directory and change the path which follows to reflect the new location. In the context of this tutorial, the updated directive will look like this:
 ```
-	root@rasphost:/home/pi# vim /etc/postgresql/9.6/main/postgresql.conf
+	vim /etc/postgresql/9.6/main/postgresql.conf
 ```
 ```
 #------------------------------------------------------------------------------
@@ -129,7 +135,7 @@ Execute the following **SHOW SQL** command to obtain the location of the **pg_hb
 # option or PGDATA environment variable, represented here as ConfigDir.
 
 #data_directory = '/var/lib/postgresql/9.6/main'		# use data in another directory
-data_directory = '/media/postgres/mem1_64gb/factoryapp/database/postgresql/9.6/main'		# use data in another directory
+data_directory = '/media/postgres/mem1_64gb/postgresql/9.6/main'		# use data in another directory
 					# (change requires restart)
 hba_file = '/etc/postgresql/9.6/main/pg_hba.conf'	# host-based authentication file
 					# (change requires restart)
@@ -140,14 +146,16 @@ ident_file = '/etc/postgresql/9.6/main/pg_ident.conf'	# ident configuration file
 external_pid_file = '/var/run/postgresql/9.6-main.pid'			# write an extra PID file
 					# (change requires restart)
 ```
-
+* Change owner of data directory:
+```
+	chown -Rv postgres:postgres /media/postgres
+```
 * Restart the PostgreSQL service:
 ```
-	root@rasphost:/media/postgres/mem1_64gb# systemctl start postgresql
+	systemctl start postgresql
 ```
-
 ```
-	root@rasphost:/media/postgres/mem1_64gb# systemctl status postgresql
+	systemctl status postgresql
 	● postgresql.service - PostgreSQL RDBMS
 	   Loaded: loaded (/lib/systemd/system/postgresql.service; enabled; vendor preset: enabled)
 	   Active: active (exited) since Sun 2022-01-09 18:16:35 CET; 1s ago
@@ -160,7 +168,7 @@ external_pid_file = '/var/run/postgresql/9.6-main.pid'			# write an extra PID fi
 
 * Verify that data directory is changed:
 ```
-	root@rasphost:/media/postgres/mem1_64gb# su postgres
+	su postgres
 	postgres@rasphost:/media/postgres/mem1_64gb$ psql
 	psql (9.6.24)
 	Digita "help" per avere un aiuto.
@@ -172,7 +180,28 @@ external_pid_file = '/var/run/postgresql/9.6-main.pid'			# write an extra PID fi
 	(1 riga)
 ```
 
+## Create PostgreSQL user
+A default PostgresSQL installation always includes the _postgres_ superuser. Initially, you must connect to PostgreSQL as the _postgres_ user until you create other users (which are also referred to as _roles_):
 
+* Log-in as root:
+```
+	su root
+```
+* Log-in as postgres user:
+```
+	su postgres
+```
+* Create a new user:
+```
+	createuser --interactive --pwprompt
+	Enter the name of the role to add: factoryapp
+	Enter the password for the new role: 
+	Confirm Password: 
+	The new role must be a superuser? (s/n) n
+	Can the new role create databases? (s/n) s
+	Can the new role create other roles? (s/n) s
+```
+ERRORE LOGIN COME factoryapp su postgres?????
 
 ## UML diagrams
 
